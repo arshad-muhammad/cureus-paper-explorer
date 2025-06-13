@@ -1,5 +1,6 @@
 
 import { ExternalLink, Calendar, Users, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,17 +11,28 @@ interface PaperCardProps {
 }
 
 const PaperCard = ({ paper }: PaperCardProps) => {
-  const handleOpenPaper = () => {
+  const navigate = useNavigate();
+
+  const handleViewDetails = () => {
+    const encodedDoi = encodeURIComponent(paper.doi);
+    navigate(`/paper/${encodedDoi}`);
+  };
+
+  const handleOpenPaper = (e: React.MouseEvent) => {
+    e.stopPropagation();
     window.open(paper.url, '_blank', 'noopener,noreferrer');
   };
 
   return (
-    <Card className="hover:shadow-xl transition-all duration-300 border-gray-200 hover:border-blue-300">
+    <Card 
+      className="hover:shadow-xl transition-all duration-300 border-gray-200 hover:border-blue-300 cursor-pointer"
+      onClick={handleViewDetails}
+    >
       <CardContent className="p-6">
         <div className="space-y-4">
           {/* Title and Year */}
           <div className="flex items-start justify-between gap-4">
-            <h3 className="text-lg font-semibold text-gray-900 leading-tight flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 leading-tight flex-1 hover:text-blue-600 transition-colors">
               {paper.title}
             </h3>
             <Badge variant="secondary" className="flex items-center space-x-1 bg-blue-100 text-blue-800">
@@ -65,15 +77,19 @@ const PaperCard = ({ paper }: PaperCardProps) => {
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100">
             <div className="text-sm text-gray-500">
-              Click to view full paper
+              Click to view details or open paper
             </div>
-            <Button 
-              onClick={handleOpenPaper}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>View Paper</span>
-            </Button>
+            <div className="flex space-x-2">
+              <Button 
+                onClick={handleOpenPaper}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                <span>Open Paper</span>
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>

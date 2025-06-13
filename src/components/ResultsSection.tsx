@@ -1,5 +1,5 @@
 
-import { Download, FileText, ExternalLink } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Paper } from '../types/paper';
 import PaperCard from './PaperCard';
@@ -10,9 +10,12 @@ interface ResultsSectionProps {
   loading: boolean;
   searchQuery: string;
   totalResults: number;
+  onLoadMore: () => void;
+  loadingMore: boolean;
+  hasMoreResults: boolean;
 }
 
-const ResultsSection = ({ papers, loading, searchQuery, totalResults }: ResultsSectionProps) => {
+const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore, loadingMore, hasMoreResults }: ResultsSectionProps) => {
   const exportToCSV = () => {
     const headers = ['Title', 'DOI', 'Authors', 'Author Emails', 'Publication Year', 'URL'];
     const csvContent = [
@@ -88,12 +91,29 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults }: ResultsS
       </div>
 
       {/* Load More Section */}
-      <div className="text-center py-8">
-        <Button variant="outline" size="lg" className="text-blue-600 border-blue-200 hover:bg-blue-50">
-          <FileText className="h-5 w-5 mr-2" />
-          Load More Results
-        </Button>
-      </div>
+      {hasMoreResults && (
+        <div className="text-center py-8">
+          <Button 
+            onClick={onLoadMore} 
+            disabled={loadingMore}
+            variant="outline" 
+            size="lg" 
+            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+          >
+            {loadingMore ? (
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>Loading More...</span>
+              </div>
+            ) : (
+              <>
+                <FileText className="h-5 w-5 mr-2" />
+                Load More Results
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

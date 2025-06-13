@@ -8,18 +8,20 @@ import { Paper } from '../types/paper';
 const Index = () => {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [totalResults, setTotalResults] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
 
-  const handleSearch = async (query: string) => {
-    if (!query.trim()) return;
-    
-    setLoading(true);
-    setSearchQuery(query);
+  const RESULTS_PER_PAGE = 20;
+
+  const fetchPapers = async (query: string, page: number = 1, append: boolean = false) => {
+    const offset = (page - 1) * RESULTS_PER_PAGE;
     
     try {
       const response = await fetch(
-        `https://api.crossref.org/journals/2168-8184/works?query=${encodeURIComponent(query)}&rows=20`
+        `https://api.crossref.org/journals/2168-8184/works?query=${encodeURIComponent(query)}&rows=${RESULTS_PER_PAGE}&offset=${offset}`
       );
       const data = await response.json();
       
@@ -35,15 +37,46 @@ const Index = () => {
         url: item.URL || `https://doi.org/${item.DOI}`
       }));
       
-      setPapers(formattedPapers);
+      if (append) {
+        setPapers(prev => [...prev, ...formattedPapers]);
+      } else {
+        setPapers(formattedPapers);
+      }
+      
       setTotalResults(data.message['total-results'] || 0);
+      const totalFetched = append ? papers.length + formattedPapers.length : formattedPapers.length;
+      setHasMoreResults(totalFetched < (data.message['total-results'] || 0));
+      
     } catch (error) {
       console.error('Error fetching papers:', error);
-      setPapers([]);
-      setTotalResults(0);
-    } finally {
-      setLoading(false);
+      if (!append) {
+        setPapers([]);
+        setTotalResults(0);
+        setHasMoreResults(false);
+      }
     }
+  };
+
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) return;
+    
+    setLoading(true);
+    setSearchQuery(query);
+    setCurrentPage(1);
+    
+    await fetchPapers(query, 1, false);
+    setLoading(false);
+  };
+
+  const handleLoadMore = async () => {
+    if (!searchQuery || loadingMore) return;
+    
+    setLoadingMore(true);
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    
+    await fetchPapers(searchQuery, nextPage, true);
+    setLoadingMore(false);
   };
 
   return (
@@ -96,6 +129,9 @@ const Index = () => {
             loading={loading} 
             searchQuery={searchQuery}
             totalResults={totalResults}
+            onLoadMore={handleLoadMore}
+            loadingMore={loadingMore}
+            hasMoreResults={hasMoreResults}
           />
         )}
       </div>
