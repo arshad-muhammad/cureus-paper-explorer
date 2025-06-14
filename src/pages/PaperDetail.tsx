@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
@@ -32,19 +31,33 @@ const PaperDetail = () => {
   const navigate = useNavigate();
   const [enhancedPaper, setEnhancedPaper] = useState<EnhancedPaper | null>(null);
   const [autoEnhancing, setAutoEnhancing] = useState(false);
+  const [hasBeenEnhanced, setHasBeenEnhanced] = useState(false);
   const { paper, loading } = usePaperDetails(doi);
   const { enhanceAuthorsWithEmails } = useEnhancedAuthors();
 
-  // Auto-enhance emails when paper loads
+  // Auto-enhance emails when paper loads, but only if not already enhanced
   useEffect(() => {
     const autoEnhanceEmails = async () => {
-      if (!paper) return;
+      if (!paper || hasBeenEnhanced) return;
+      
+      // Check if paper already has enhanced authors
+      const hasEnhancedAuthors = paper.authors.some(author => 
+        (author as EnhancedAuthor).source || (author as EnhancedAuthor).confidence !== undefined
+      );
+      
+      if (hasEnhancedAuthors) {
+        // Paper is already enhanced, just use it as-is
+        setEnhancedPaper(paper as EnhancedPaper);
+        setHasBeenEnhanced(true);
+        return;
+      }
       
       setAutoEnhancing(true);
       try {
         console.log('Auto-enhancing emails for paper:', paper.doi);
         const enhanced = await enhanceAuthorsWithEmails(paper);
         setEnhancedPaper(enhanced);
+        setHasBeenEnhanced(true);
         console.log('Auto email enhancement completed');
       } catch (error) {
         console.error('Error auto-enhancing emails:', error);
@@ -54,7 +67,7 @@ const PaperDetail = () => {
     };
 
     autoEnhanceEmails();
-  }, [paper, enhanceAuthorsWithEmails]);
+  }, [paper, enhanceAuthorsWithEmails, hasBeenEnhanced]);
 
   const handleBack = () => {
     navigate('/');

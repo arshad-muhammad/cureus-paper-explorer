@@ -1,6 +1,5 @@
-
 import { Download, FileText, Mail, Zap } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paper } from '../types/paper';
 import PaperCard from './PaperCard';
@@ -31,9 +30,10 @@ interface ResultsSectionProps {
 const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore, loadingMore, hasMoreResults }: ResultsSectionProps) => {
   const [enhancedPapers, setEnhancedPapers] = useState<EnhancedPaper[]>([]);
   const [autoEnhancing, setAutoEnhancing] = useState(false);
+  const [enhancedPaperIds, setEnhancedPaperIds] = useState<Set<string>>(new Set());
   const { enhanceAuthorsWithEmails } = useEnhancedAuthors();
 
-  // Auto-enhance emails when papers change
+  // Auto-enhance emails when papers change, but only for papers that haven't been enhanced
   useEffect(() => {
     const autoEnhanceEmails = async () => {
       if (papers.length === 0) {
@@ -41,25 +41,55 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore
         return;
       }
 
+      // Check if papers are already enhanced or if we've already enhanced them
+      const needsEnhancement = papers.some(paper => {
+        const hasEnhancedAuthors = paper.authors.some(author => 
+          (author as EnhancedAuthor).source || (author as EnhancedAuthor).confidence !== undefined
+        );
+        return !hasEnhancedAuthors && !enhancedPaperIds.has(paper.doi);
+      });
+
+      if (!needsEnhancement) {
+        // Papers are already enhanced, just use them as-is
+        setEnhancedPapers(papers as EnhancedPaper[]);
+        return;
+      }
+
       setAutoEnhancing(true);
       try {
-        console.log('Auto-enhancing emails for all papers...');
+        console.log('Auto-enhancing emails for new papers...');
         const enhanced = await Promise.all(
-          papers.map(paper => enhanceAuthorsWithEmails(paper))
+          papers.map(paper => {
+            // If paper is already enhanced or we've enhanced it before, return as-is
+            const hasEnhancedAuthors = paper.authors.some(author => 
+              (author as EnhancedAuthor).source || (author as EnhancedAuthor).confidence !== undefined
+            );
+            if (hasEnhancedAuthors || enhancedPaperIds.has(paper.doi)) {
+              return Promise.resolve(paper as EnhancedPaper);
+            }
+            return enhanceAuthorsWithEmails(paper);
+          })
         );
+        
         setEnhancedPapers(enhanced);
+        
+        // Mark all papers as enhanced
+        const newEnhancedIds = new Set(enhancedPaperIds);
+        papers.forEach(paper => newEnhancedIds.add(paper.doi));
+        setEnhancedPaperIds(newEnhancedIds);
+        
         console.log('Auto email enhancement completed');
       } catch (error) {
         console.error('Error auto-enhancing emails:', error);
         // Fallback to original papers if enhancement fails
-        setEnhancedPapers([]);
+        setEnhancedPapers(papers as EnhancedPaper[]);
       } finally {
         setAutoEnhancing(false);
       }
     };
 
     autoEnhanceEmails();
-  }, [papers, enhanceAuthorsWithEmails]);
+  }, [papers, enhanceAuthorsWithEmails, enhancedPaperIds]);
 
   const exportToCSV = () => {
     const papersToExport = enhancedPapers.length > 0 ? enhancedPapers : papers;
