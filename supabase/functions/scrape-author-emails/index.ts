@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -19,6 +18,41 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
+
+// Function to generate synthetic email from author name
+const generateSyntheticEmail = (authorName: string): string => {
+  // Clean and format the name
+  const nameParts = authorName.toLowerCase().trim().split(/\s+/);
+  if (nameParts.length === 0) return 'author@cureus-author.com';
+  
+  // Remove any special characters and keep only letters
+  const cleanName = (name: string) => name.replace(/[^a-z]/g, '');
+  
+  let emailPrefix = '';
+  
+  if (nameParts.length === 1) {
+    // Single name - use as is
+    emailPrefix = cleanName(nameParts[0]);
+  } else if (nameParts.length === 2) {
+    // First and last name - use firstname.lastname format
+    const firstName = cleanName(nameParts[0]);
+    const lastName = cleanName(nameParts[1]);
+    emailPrefix = `${firstName}.${lastName}`;
+  } else {
+    // Multiple names - use first and last
+    const firstName = cleanName(nameParts[0]);
+    const lastName = cleanName(nameParts[nameParts.length - 1]);
+    emailPrefix = `${firstName}.${lastName}`;
+  }
+  
+  // Fallback if cleaning resulted in empty string
+  if (!emailPrefix) {
+    emailPrefix = 'author';
+  }
+  
+  // Use a generic domain for synthetic emails
+  return `${emailPrefix}@cureus-author.com`;
+};
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
@@ -72,13 +106,14 @@ const handler = async (req: Request): Promise<Response> => {
           confidence = cachedEmail.confidence_score || 0.5;
           console.log(`Found cached email for ${author.name}: ${email}`);
         } else if (!email) {
-          // Attempt to generate/guess email based on common patterns
-          email = await generatePotentialEmail(author.name, doi);
+          // Generate synthetic email if no real email is found
+          email = generateSyntheticEmail(author.name);
           source = 'generated';
-          confidence = 0.3;
+          confidence = 0.1;
+          console.log(`Generated synthetic email for ${author.name}: ${email}`);
         }
 
-        // Cache the email result
+        // Cache the email result (including generated ones)
         if (email) {
           await supabase
             .from('author_emails')
@@ -105,11 +140,13 @@ const handler = async (req: Request): Promise<Response> => {
 
       } catch (error) {
         console.error(`Error processing author ${author.name}:`, error);
+        // Even in error case, provide a generated email
+        const syntheticEmail = generateSyntheticEmail(author.name);
         enrichedAuthors.push({
           ...author,
-          email: author.email || null,
-          source: 'original',
-          confidence: author.email ? 1.0 : 0.0
+          email: author.email || syntheticEmail,
+          source: author.email ? 'original' : 'generated',
+          confidence: author.email ? 1.0 : 0.1
         });
       }
     }
@@ -155,39 +192,5 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 };
-
-async function generatePotentialEmail(authorName: string, doi: string): Promise<string | null> {
-  try {
-    // Simple email generation based on common academic patterns
-    const nameParts = authorName.toLowerCase().trim().split(/\s+/);
-    if (nameParts.length < 2) return null;
-
-    const firstName = nameParts[0];
-    const lastName = nameParts[nameParts.length - 1];
-    
-    // Try to extract institution info from DOI or use common academic domains
-    const commonDomains = [
-      'gmail.com',
-      'yahoo.com',
-      'outlook.com',
-      'university.edu',
-      'institute.org'
-    ];
-
-    // Generate potential email patterns
-    const patterns = [
-      `${firstName}.${lastName}@${commonDomains[0]}`,
-      `${firstName}${lastName}@${commonDomains[0]}`,
-      `${firstName[0]}${lastName}@${commonDomains[0]}`
-    ];
-
-    // Return the first pattern as a low-confidence guess
-    return patterns[0];
-    
-  } catch (error) {
-    console.error('Error generating email:', error);
-    return null;
-  }
-}
 
 serve(handler);
