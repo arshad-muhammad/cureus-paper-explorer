@@ -1,17 +1,32 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Users, Mail, ExternalLink, Globe, BookOpen } from 'lucide-react';
+import { ArrowLeft, Calendar, Users, Mail, ExternalLink, Globe, BookOpen, Shield, AlertCircle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Paper } from '../types/paper';
+import { useEnhancedAuthors } from '../hooks/useEnhancedAuthors';
+
+interface EnhancedAuthor {
+  name: string;
+  email?: string | null;
+  source?: string;
+  confidence?: number;
+}
+
+interface EnhancedPaper extends Omit<Paper, 'authors'> {
+  authors: EnhancedAuthor[];
+}
 
 const PaperDetail = () => {
   const { doi } = useParams<{ doi: string }>();
   const navigate = useNavigate();
   const [paper, setPaper] = useState<Paper | null>(null);
+  const [enhancedPaper, setEnhancedPaper] = useState<EnhancedPaper | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enhancingEmails, setEnhancingEmails] = useState(false);
+  const { enhanceAuthorsWithEmails } = useEnhancedAuthors();
 
   useEffect(() => {
     const fetchPaperDetails = async () => {
@@ -47,6 +62,22 @@ const PaperDetail = () => {
     fetchPaperDetails();
   }, [doi]);
 
+  const handleEnhanceEmails = async () => {
+    if (!paper) return;
+    
+    setEnhancingEmails(true);
+    try {
+      console.log('Enhancing emails for paper:', paper.doi);
+      const enhanced = await enhanceAuthorsWithEmails(paper);
+      setEnhancedPaper(enhanced);
+      console.log('Email enhancement completed');
+    } catch (error) {
+      console.error('Error enhancing emails:', error);
+    } finally {
+      setEnhancingEmails(false);
+    }
+  };
+
   const handleBack = () => {
     navigate('/');
   };
@@ -55,6 +86,51 @@ const PaperDetail = () => {
     if (paper) {
       window.open(paper.url, '_blank', 'noopener,noreferrer');
     }
+  };
+
+  const getConfidenceBadge = (confidence?: number) => {
+    if (!confidence) return null;
+    
+    if (confidence >= 0.8) {
+      return (
+        <Badge variant="secondary" className="bg-green-100 text-green-800">
+          <Shield className="h-3 w-3 mr-1" />
+          High
+        </Badge>
+      );
+    } else if (confidence >= 0.5) {
+      return (
+        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Medium
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="secondary" className="bg-gray-100 text-gray-600">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Low
+        </Badge>
+      );
+    }
+  };
+
+  const getSourceBadge = (source?: string) => {
+    const sourceLabels = {
+      'crossref': 'CrossRef',
+      'scraped': 'Scraped',
+      'generated': 'Generated',
+      'manual': 'Manual',
+      'cached': 'Cached'
+    };
+
+    if (!source) return null;
+
+    return (
+      <Badge variant="outline" className="text-xs">
+        {sourceLabels[source as keyof typeof sourceLabels] || source}
+      </Badge>
+    );
   };
 
   if (loading) {
@@ -94,6 +170,9 @@ const PaperDetail = () => {
     );
   }
 
+  const displayAuthors = enhancedPaper ? enhancedPaper.authors : paper.authors;
+  const totalEmails = displayAuthors.filter(author => author.email).length;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -118,16 +197,56 @@ const PaperDetail = () => {
                     <BookOpen className="h-3 w-3" />
                     <span>Cureus Journal</span>
                   </Badge>
+                  {enhancedPaper && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      <Mail className="h-3 w-3 mr-1" />
+                      {totalEmails} emails found
+                    </Badge>
+                  )}
                 </div>
               </div>
-              <Button onClick={handleOpenPaper} className="bg-blue-600 hover:bg-blue-700">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Full Paper
-              </Button>
+              <div className="flex space-x-2">
+                {!enhancedPaper && (
+                  <Button
+                    onClick={handleEnhanceEmails}
+                    disabled={enhancingEmails}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {enhancingEmails ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Enhancing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Enhance Emails
+                      </>
+                    )}
+                  </Button>
+                )}
+                <Button onClick={handleOpenPaper} className="bg-blue-600 hover:bg-blue-700">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Full Paper
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-8 space-y-8">
+            {/* Enhancement Status */}
+            {enhancedPaper && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center space-x-2 text-blue-800">
+                  <Mail className="h-5 w-5" />
+                  <span className="font-medium">Email Enhancement Active</span>
+                </div>
+                <p className="text-blue-700 text-sm mt-1">
+                  Authors have been enhanced with additional email data from our database and scraping services.
+                </p>
+              </div>
+            )}
+
             {/* DOI Section */}
             <div className="space-y-3">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center">
@@ -140,24 +259,32 @@ const PaperDetail = () => {
             </div>
 
             {/* Authors Section */}
-            {paper.authors.length > 0 && (
+            {displayAuthors.length > 0 && (
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                   <Users className="h-5 w-5 mr-2 text-blue-600" />
-                  Authors ({paper.authors.length})
+                  Authors ({displayAuthors.length})
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {paper.authors.map((author, index) => (
+                  {displayAuthors.map((author, index) => (
                     <Card key={index} className="border border-gray-200">
                       <CardContent className="p-4">
-                        <div className="space-y-2">
-                          <h4 className="font-medium text-gray-900">{author.name}</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-gray-900">{author.name}</h4>
+                            {enhancedPaper && (author as EnhancedAuthor).source && (
+                              <div className="flex space-x-1">
+                                {getSourceBadge((author as EnhancedAuthor).source)}
+                                {getConfidenceBadge((author as EnhancedAuthor).confidence)}
+                              </div>
+                            )}
+                          </div>
                           {author.email ? (
                             <div className="flex items-center space-x-2 text-sm text-blue-600">
                               <Mail className="h-4 w-4" />
                               <a 
                                 href={`mailto:${author.email}`}
-                                className="hover:underline"
+                                className="hover:underline break-all"
                               >
                                 {author.email}
                               </a>
