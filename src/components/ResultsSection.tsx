@@ -1,9 +1,22 @@
 
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Mail, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paper } from '../types/paper';
 import PaperCard from './PaperCard';
 import LoadingSkeleton from './LoadingSkeleton';
+import { useEnhancedAuthors } from '../hooks/useEnhancedAuthors';
+
+interface EnhancedAuthor {
+  name: string;
+  email?: string | null;
+  source?: string;
+  confidence?: number;
+}
+
+interface EnhancedPaper extends Omit<Paper, 'authors'> {
+  authors: EnhancedAuthor[];
+}
 
 interface ResultsSectionProps {
   papers: Paper[];
@@ -16,15 +29,43 @@ interface ResultsSectionProps {
 }
 
 const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore, loadingMore, hasMoreResults }: ResultsSectionProps) => {
+  const [enhancedPapers, setEnhancedPapers] = useState<EnhancedPaper[]>([]);
+  const [enhancingEmails, setEnhancingEmails] = useState(false);
+  const { enhanceAuthorsWithEmails } = useEnhancedAuthors();
+
+  // Reset enhanced papers when papers change
+  useEffect(() => {
+    setEnhancedPapers([]);
+  }, [papers]);
+
+  const handleEnhanceEmails = async () => {
+    setEnhancingEmails(true);
+    try {
+      console.log('Starting email enhancement for all papers...');
+      const enhanced = await Promise.all(
+        papers.map(paper => enhanceAuthorsWithEmails(paper))
+      );
+      setEnhancedPapers(enhanced);
+      console.log('Email enhancement completed');
+    } catch (error) {
+      console.error('Error enhancing emails:', error);
+    } finally {
+      setEnhancingEmails(false);
+    }
+  };
+
   const exportToCSV = () => {
-    const headers = ['Title', 'DOI', 'Authors', 'Author Emails', 'Publication Year', 'URL'];
+    const papersToExport = enhancedPapers.length > 0 ? enhancedPapers : papers;
+    const headers = ['Title', 'DOI', 'Authors', 'Author Emails', 'Email Sources', 'Email Confidence', 'Publication Year', 'URL'];
     const csvContent = [
       headers.join(','),
-      ...papers.map(paper => [
+      ...papersToExport.map(paper => [
         `"${paper.title.replace(/"/g, '""')}"`,
         paper.doi,
         `"${paper.authors.map(a => a.name).join('; ')}"`,
         `"${paper.authors.filter(a => a.email).map(a => a.email).join('; ')}"`,
+        `"${paper.authors.map(a => (a as EnhancedAuthor).source || 'unknown').join('; ')}"`,
+        `"${paper.authors.map(a => (a as EnhancedAuthor).confidence || 0).join('; ')}"`,
         paper.publicationYear,
         paper.url
       ].join(','))
@@ -34,7 +75,7 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `cureus-papers-${searchQuery}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `cureus-papers-enhanced-${searchQuery}-${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -59,6 +100,11 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore
     return null;
   }
 
+  const papersToDisplay = enhancedPapers.length > 0 ? enhancedPapers : papers;
+  const totalEmails = papersToDisplay.reduce((sum, paper) => 
+    sum + paper.authors.filter(author => author.email).length, 0
+  );
+
   return (
     <div className="space-y-6">
       {/* Results Header */}
@@ -67,12 +113,39 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore
           <h3 className="text-xl font-bold text-gray-900">
             Search Results for "{searchQuery}"
           </h3>
-          <p className="text-gray-600 mt-1">
-            Found {totalResults.toLocaleString()} papers • Showing {papers.length} results
-          </p>
+          <div className="flex items-center space-x-4 mt-2">
+            <p className="text-gray-600">
+              Found {totalResults.toLocaleString()} papers • Showing {papers.length} results
+            </p>
+            {enhancedPapers.length > 0 && (
+              <p className="text-blue-600 font-medium">
+                {totalEmails} author emails found
+              </p>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center space-x-3">
+          {enhancedPapers.length === 0 && (
+            <Button
+              onClick={handleEnhanceEmails}
+              disabled={enhancingEmails}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {enhancingEmails ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Enhancing...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4" />
+                  <span>Enhance Emails</span>
+                </>
+              )}
+            </Button>
+          )}
+          
           <Button
             onClick={exportToCSV}
             className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white"
@@ -83,10 +156,27 @@ const ResultsSection = ({ papers, loading, searchQuery, totalResults, onLoadMore
         </div>
       </div>
 
+      {/* Enhancement Status */}
+      {enhancedPapers.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2 text-blue-800">
+            <Mail className="h-5 w-5" />
+            <span className="font-medium">Email Enhancement Active</span>
+          </div>
+          <p className="text-blue-700 text-sm mt-1">
+            Authors have been enhanced with additional email data from our database and scraping services.
+          </p>
+        </div>
+      )}
+
       {/* Results Grid */}
       <div className="grid grid-cols-1 gap-6">
-        {papers.map((paper, index) => (
-          <PaperCard key={`${paper.doi}-${index}`} paper={paper} />
+        {papersToDisplay.map((paper, index) => (
+          <PaperCard 
+            key={`${paper.doi}-${index}`} 
+            paper={paper}
+            enhancedAuthors={enhancedPapers.length > 0 ? paper.authors : undefined}
+          />
         ))}
       </div>
 

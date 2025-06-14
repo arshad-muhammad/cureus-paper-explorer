@@ -1,1 +1,5 @@
+
 project_id = "izniiomvacugbknrtyqu"
+
+[functions.scrape-author-emails]
+verify_jwt = false

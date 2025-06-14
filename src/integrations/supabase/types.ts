@@ -9,6 +9,36 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      author_emails: {
+        Row: {
+          author_name: string
+          confidence_score: number | null
+          created_at: string
+          email: string | null
+          id: string
+          last_updated: string
+          source: string
+        }
+        Insert: {
+          author_name: string
+          confidence_score?: number | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_updated?: string
+          source: string
+        }
+        Update: {
+          author_name?: string
+          confidence_score?: number | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_updated?: string
+          source?: string
+        }
+        Relationships: []
+      }
       code_reviews: {
         Row: {
           created_at: string | null
@@ -159,6 +189,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scraping_jobs: {
+        Row: {
+          author_count: number | null
+          completed_at: string | null
+          created_at: string
+          doi: string
+          emails_found: number | null
+          error_message: string | null
+          id: string
+          status: string
+        }
+        Insert: {
+          author_count?: number | null
+          completed_at?: string | null
+          created_at?: string
+          doi: string
+          emails_found?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string
+        }
+        Update: {
+          author_count?: number | null
+          completed_at?: string | null
+          created_at?: string
+          doi?: string
+          emails_found?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string
+        }
+        Relationships: []
       }
     }
     Views: {
