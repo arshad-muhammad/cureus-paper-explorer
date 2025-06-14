@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,25 +31,30 @@ const PaperDetail = () => {
   const { doi } = useParams<{ doi: string }>();
   const navigate = useNavigate();
   const [enhancedPaper, setEnhancedPaper] = useState<EnhancedPaper | null>(null);
-  const [enhancingEmails, setEnhancingEmails] = useState(false);
+  const [autoEnhancing, setAutoEnhancing] = useState(false);
   const { paper, loading } = usePaperDetails(doi);
   const { enhanceAuthorsWithEmails } = useEnhancedAuthors();
 
-  const handleEnhanceEmails = async () => {
-    if (!paper) return;
-    
-    setEnhancingEmails(true);
-    try {
-      console.log('Enhancing emails for paper:', paper.doi);
-      const enhanced = await enhanceAuthorsWithEmails(paper);
-      setEnhancedPaper(enhanced);
-      console.log('Email enhancement completed');
-    } catch (error) {
-      console.error('Error enhancing emails:', error);
-    } finally {
-      setEnhancingEmails(false);
-    }
-  };
+  // Auto-enhance emails when paper loads
+  useEffect(() => {
+    const autoEnhanceEmails = async () => {
+      if (!paper) return;
+      
+      setAutoEnhancing(true);
+      try {
+        console.log('Auto-enhancing emails for paper:', paper.doi);
+        const enhanced = await enhanceAuthorsWithEmails(paper);
+        setEnhancedPaper(enhanced);
+        console.log('Auto email enhancement completed');
+      } catch (error) {
+        console.error('Error auto-enhancing emails:', error);
+      } finally {
+        setAutoEnhancing(false);
+      }
+    };
+
+    autoEnhanceEmails();
+  }, [paper, enhanceAuthorsWithEmails]);
 
   const handleBack = () => {
     navigate('/');
@@ -117,14 +122,26 @@ const PaperDetail = () => {
               publicationYear={paper.publicationYear}
               totalEmails={totalEmails}
               isEnhanced={isEnhanced}
-              isEnhancing={enhancingEmails}
-              onEnhanceEmails={handleEnhanceEmails}
+              isEnhancing={autoEnhancing}
+              onEnhanceEmails={() => {}} // No longer needed since it's automatic
               onOpenPaper={handleOpenPaper}
             />
           </CardHeader>
 
           <CardContent className="p-8 space-y-8">
-            <EnhancementStatus isEnhanced={isEnhanced} />
+            {autoEnhancing && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center space-x-2 text-blue-800">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="font-medium">Auto-enhancing emails...</span>
+                </div>
+                <p className="text-blue-700 text-sm mt-1">
+                  Automatically enhancing author emails with additional data from our database and scraping services.
+                </p>
+              </div>
+            )}
+
+            <EnhancementStatus isEnhanced={isEnhanced && !autoEnhancing} />
 
             <DOISection doi={paper.doi} />
 
